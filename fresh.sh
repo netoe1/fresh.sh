@@ -427,6 +427,11 @@ function load_dependencies_cfg(){
 
   while IFS= read -r line; do
 
+    # remove leading/trailing whitespace
+    line="${line#"${line%%[![:space:]]*}"}"   # strip leading
+    line="${line%"${line##*[![:space:]]}"}"   # strip trailing
+
+    # ignore blank or comment lines
     [[ -z $line || $line == \#* ]] && continue
 
     DEPENDENCIES+=("$line")
@@ -439,22 +444,9 @@ function setting_flatpak_config(){
   fi
 }
 
-
-
 function main(){
-  load_dependencies_cfg ./teu.cfg
-  echo "${DEPENDENCIES[@]}"
+  load_dependencies_cfg ./dependencies.cfg
+  #echo "${DEPENDENCIES[@]}"
 }
 
-
 main
-
-
-
-
-
-
-
-
-
-
