@@ -444,6 +444,10 @@ function setting_flatpak_config(){
   fi
 }
 
+function install_by_apt(){d
+  echo 'fresh.sh: now, we gonna install dependencies by apt. We gonna need your sudo password.'
+}
+
 function main(){
   load_dependencies_cfg ./dependencies.cfg
   #echo "${DEPENDENCIES[@]}"
