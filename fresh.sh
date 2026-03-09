@@ -360,6 +360,11 @@
 # Create an empty array for dependencies.
 declare -a DEPENDENCIES
 
+
+# Receive a parameter and trim string.
+function trim() {
+    echo "$1" | xargs
+}
 # generic helper: return 0 if command is available, 1 otherwise
 
 function command_exists() {
@@ -368,24 +373,44 @@ function command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# check if a Debian/Ubuntu package is installed
-# returns 0 when installed, 1 otherwise
+
 function is_app_installed() {
-    # usage: app_installed <package-name>
     local pkg="$1"
 
-    # first try to see if a binary exists in PATH; this covers non-dpkg
-    # programs such as `nvm` or `docker` when installed manually.
-    if command_exists "$pkg"; then
+    # 1. Validação de entrada: Se o nome estiver vazio, retorne erro (1)
+    [[ -z "$pkg" ]] && return 1
+
+    # 2. Verificação via dpkg-query (O método mais seguro para APT)
+    # Procuramos especificamente pelo estado "install ok installed"
+    # O ^ e $ no grep garantem que a linha seja exatamente essa, sem variações.
+    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "^install ok installed$"; then
         return 0
     fi
 
-    # fall back to dpkg query for `apt` managed packages
-    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+    # 3. Verificação via command -v (Para binários fora do APT)
+    # Isso cobre nvm, docker (se instalado via binário), scripts no /usr/local/bin, etc.
+    # Usamos o 'command -v' pois ele é um builtin do shell, mais rápido que o 'which'.
+    if command -v "$pkg" >/dev/null 2>&1; then
         return 0
     fi
 
+    # 4. Se chegou aqui, o pacote/comando realmente não foi encontrado
     return 1
+}
+
+function is_package_installed() {
+    local pkg="$1"
+    
+    # Se o nome estiver vazio, retorna erro
+    [[ -z "$pkg" ]] && return 1
+
+    # O dpkg-query é a fonte da verdade para o APT.
+    # Se ele não retornar "install ok installed", o pacote precisa de atenção.
+    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "^install ok installed$"; then
+        return 0 # Está instalado corretamente
+    fi
+
+    return 1 # Não está instalado ou está quebrado
 }
 
 function install_nvm(){  
@@ -408,34 +433,40 @@ function load_dependencies_cfg(){
 
   local cfg_path="$1"            
 
-  if [[ -z $cfg_path ]]; then
-    echo "fresh.sh: no path provided to load_dependencies_cfg" >&2
+  if [[ -z "$cfg_path" ]]; then
+    echo "fresh.sh: no path provided" >&2
     return 1
   fi
 
-  if [[ ! -e $cfg_path ]]; then
-    echo "fresh.sh: $cfg_path does not exist!" >&2
+  if [[ ! -f "$cfg_path" ]]; then # -f verifica se é um arquivo regular
+    echo "fresh.sh: $cfg_path does not exist or is not a file!" >&2
     return 1
-  elif [[ ! -s $cfg_path ]]; then
+  fi
+
+  if [[ ! -s "$cfg_path" ]]; then
      echo "fresh.sh: $cfg_path is empty" >&2
      return 0        
-  else
-      echo "fresh.sh: found content in $cfg_path; loading"
   fi
 
   DEPENDENCIES=()
 
-  while IFS= read -r line; do
+  # O '|| [[ -n "$line" ]]' garante que a última linha seja lida mesmo sem \n no final
+  while IFS= read -r line || [[ -n "$line" ]]; do
 
-    # remove leading/trailing whitespace
-    line="${line#"${line%%[![:space:]]*}"}"   # strip leading
-    line="${line%"${line##*[![:space:]]}"}"   # strip trailing
+    # 1. Remove caracteres \r (estilo Windows)
+    line="${line//$'\r'/}"
 
-    # ignore blank or comment lines
-    [[ -z $line || $line == \#* ]] && continue
+    # 2. Trim (remover espaços no início e fim)
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+
+    # 3. Ignora linhas vazias ou comentários
+    [[ -z "$line" || "$line" == \#* ]] && continue
 
     DEPENDENCIES+=("$line")
   done < "$cfg_path"
+
+  echo "fresh.sh: Loaded ${#DEPENDENCIES[@]} dependencies."
 }
 
 function setting_flatpak_config(){  
@@ -444,13 +475,35 @@ function setting_flatpak_config(){
   fi
 }
 
-function install_by_apt(){d
+function install_by_apt() {
+  # 'local' evita que a variável 'aux' vaze para fora da função
+  local aux=""
+  
   echo 'fresh.sh: now, we gonna install dependencies by apt. We gonna need your sudo password.'
+
+  for i in "${DEPENDENCIES[@]}"; do
+    if ! is_package_installed "$i"; then
+       aux+="$i "
+    fi
+  done
+  
+  # Limpa o espaço extra no final
+  aux=$(trim "$aux")
+
+  echo "$aux"
+
+  if [ -n "$aux" ]; then
+    echo "fresh.sh: Installing: $aux"
+    sudo apt update && sudo apt install -y $aux
+  else
+    echo "fresh.sh: all dependencies are already installed!"
+  fi
 }
 
 function main(){
   load_dependencies_cfg ./dependencies.cfg
-  #echo "${DEPENDENCIES[@]}"
+  install_by_apt 
+  echo "fresh.sh: exiting..."
 }
 
 main
