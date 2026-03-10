@@ -5,4 +5,6 @@
 
 I'm doing projects to make some libs for python, to make this more professional, but, for now, I need to fix this problem the most quickly way possible.
 
-Enjoy!
+Make sure that chmod is +x or 777 permission, to enable .sh execution. I'll add an verification internally at script main's function.
+# Enjoy!
+## Netoe1 - Vertex Project.

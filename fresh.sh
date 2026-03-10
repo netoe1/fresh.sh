@@ -50,7 +50,6 @@
 # sudo apt install git 
 # sudo apt install make 
 
-
 # Create an empty array for dependencies.
 declare -a DEPENDENCIES
 
@@ -194,6 +193,12 @@ function install_by_apt() {
   fi
 }
 
+function is_sh_executable(){
+  
+  if [ ! -x $1]{
+    exit 
+  }
+}
 function main(){
   load_dependencies_cfg ./dependencies.cfg
   install_by_apt 
