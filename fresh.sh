@@ -200,8 +200,15 @@ function is_sh_executable(){
   }
 }
 function main(){
+  # Seek and find file for config
+  # Usage: load_dependencies <path>
   load_dependencies_cfg ./dependencies.cfg
+
+  # Install things by apt package manager, only for Debian-like distros.
   install_by_apt 
+
+  # Nvm fo node package manager
+  install_nvm
   echo "fresh.sh: exiting..."
 }
 
